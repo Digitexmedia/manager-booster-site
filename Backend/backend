@@ -1,0 +1,36 @@
+// ManagerBooster.site - Full SMM Panel Boilerplate (Phase 1)
+
+// Root structure (Monorepo style) // apps/ //   api/      -> NestJS backend (services, orders, payments, providers) //   web/      -> Next.js frontend (client + admin UI) // infra/ //   docker/   -> PostgreSQL + Redis containers //   prisma/   -> schema.prisma
+
+// BEGIN: apps/api/src/main.ts import { NestFactory } from '@nestjs/core'; import { AppModule } from './app.module'; import * as cookieParser from 'cookie-parser'; import { ValidationPipe } from '@nestjs/common';
+
+async function bootstrap() { const app = await NestFactory.create(AppModule); app.enableCors({ origin: true, credentials: true }); app.use(cookieParser()); app.useGlobalPipes(new ValidationPipe({ whitelist: true })); await app.listen(4000); } bootstrap(); // END
+
+// BEGIN: apps/api/src/app.module.ts import { Module } from '@nestjs/common'; import { PrismaModule } from './prisma/prisma.module'; import { AuthModule } from './auth/auth.module'; import { UsersModule } from './users/users.module'; import { WalletModule } from './wallet/wallet.module'; import { ServicesModule } from './services/services.module'; import { OrdersModule } from './orders/orders.module'; import { ProvidersModule } from './providers/providers.module'; import { PaymentsModule } from './payments/payments.module';
+
+@Module({ imports: [ PrismaModule, AuthModule, UsersModule, WalletModule, ServicesModule, OrdersModule, ProvidersModule, PaymentsModule, ], }) export class AppModule {} // END
+
+// BEGIN: infra/prisma/schema.prisma // PostgreSQL DB schema
+
+generator client { provider = "prisma-client-js" }
+
+datasource db { provider = "postgresql" url      = env("DATABASE_URL") }
+
+model User { id        String   @id @default(cuid()) email     String   @unique phone     String?  @unique password  String balance   Float    @default(0) role      String   @default("USER") createdAt DateTime @default(now()) orders    Order[] wallet    WalletTransaction[] }
+
+model WalletTransaction { id        String   @id @default(cuid()) userId    String type      String   // TOPUP, ADJUST, WITHDRAW method    String   // M-PESA, PayPal, Stripe, etc. amount    Float status    String   // PENDING, SUCCESS, FAILED ref       String? createdAt DateTime @default(now())
+
+user User @relation(fields: [userId], references: [id]) }
+
+model Service { id            String   @id @default(cuid()) name          String category      String providerId    String pricePer1K    Float costPer1K     Float min           Int max           Int dripfeed      Boolean  @default(false) refillable    Boolean  @default(false) tags          String[] active        Boolean  @default(true) createdAt     DateTime @default(now())
+
+provider Provider @relation(fields: [providerId], references: [id]) orders   Order[] }
+
+model Order { id          String   @id @default(cuid()) userId      String serviceId   String link        String quantity    Int totalPrice  Float status      String   // PENDING, PROCESSING, COMPLETED, FAILED, REFUNDED createdAt   DateTime @default(now()) providerOrderId String?
+
+user    User    @relation(fields: [userId], references: [id]) service Service @relation(fields: [serviceId], references: [id]) }
+
+model Provider { id         String   @id @default(cuid()) name       String apiUrl     String apiKey     String active     Boolean  @default(true) priority   Int      @default(1) createdAt  DateTime @default(now())
+
+services Service[] } // END
+
